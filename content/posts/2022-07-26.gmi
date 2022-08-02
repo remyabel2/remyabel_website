@@ -1,0 +1,24 @@
+# Why you should not disable SELinux
+
+This post is inspired by a 3 month blogpost[1] suggesting you disable SELinux (and the comments within and on the orange site) as well as the Nobara project. For the uninitiated, Nobara is a gaming focused Fedora remix designed to work "out of the box" for gamers. However, one of the things it does is set SELinux to permissive mode which I do not recommend at all.
+
+=> https://news.ycombinator.com/item?id=31176138 SELinux is unmanageable; just turn it off if it gets in your way
+=> https://nobaraproject.org/ Nobara project homepage
+
+First, let me link to my original comment on the post. I cannot seem to link directly to my comment, so just CTRL+F "remyabel".
+
+=> https://comment.ctrl.blog/discussion/selinux-unmanageable Blog post comments
+
+The first point I tackle is regarding the documentation. It is true that the documentation is difficult to read for end-users, however, it is geared towards system administrators and policy makers. Those looking for a user-friendly introduction to SELinux should consult end-user tutorials like the one on the Rocky Linux site.
+
+=> https://docs.rockylinux.org/es/guides/security/learning_selinux/ Rocky Linux Learning SELinux
+
+Secondly, if there is an issue you encounter with SELinux, disabling it is not the answer. If you re-enable SELinux on a system that previously had it disabled, your system can either be rendered unbootable or programs may randomly stop working and you will need to fix it.
+
+However, as shown in the tutorial linked above, addressing issues is not difficult. Most of the time it simply requires enabling a bool (for example for an antivirus or httpd server) or using audit2why and importing the module. The troubleshooter even lets you open a bug report, however policy bugs made by the distro maintainers tend to get noticed quickly so it will get fixed with no action required on the end-users part.
+
+=> https://docs.fedoraproject.org/en-US/quick-docs/changing-selinux-states-and-modes/#selinux-enabling-selinux Fedora SELinux documentation
+
+Third, there is a widespread misconception that containers are an alternative to SELinux. In actuality, containers (and particularly Docker) are insecure out of the box and a combination of seccomp profiles and SELinux help prevent sandbox escapes. One of the primary issues with Docker is that anyone with access to the socket essentially has root privileges, which is why it is considered an anti-pattern to mount the socket within a container. Podman, an alternative to Docker, is designed from the ground up to run without root privileges.
+
+I suspect that Nobara set SELinux to permissive to avoid complaints from users or avoid hearing bug reports that are actually policy issues, but this is not the correct approach in my opinion. Instead, legitimate issues should be reported so they can be fixed or users should be linked to basic tutorials so they can temporarily workaround issues on their own.

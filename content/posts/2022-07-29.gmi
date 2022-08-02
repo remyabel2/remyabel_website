@@ -1,0 +1,22 @@
+# NVIDIA with Wayland on GNOME
+
+Your immediate thought may be why I'm trying to use an NVIDIA card with Wayland. The simple answer is I've been stuck with a GTX 1060 for the past 5 years with no money to buy an AMD card. Nouveau is a non-starter as the Pascal series of cards does not support reclocking and will occasionally lock up the system.
+
+As of driver version 515.57 with GNOME 42, I have a mostly stable experience on Wayland. Emphasis on "mostly". Going from not being able to even log into the desktop to a functional experience is a major improvement, however I semi-regularly experience freezes with perplexing errors:
+
+    [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000100] Failed to apply atomic modeset.
+    [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000100] Flip event timeout on head 0
+
+The next troubleshooting step would be to restart the shell, but as gnome-shell becomes unresponsive, you cannot even get the ALT+F2 prompt up. Besides, restarting the gnome-shell on Wayland is currently not supported and pkill -HUP gnome-shell will take your entire session with it (this problem does not exist on X11).
+
+I've googled these errors and haven't found anything useful and sent an e-mail to NVIDIA's linux bugs e-mail without a response. I've been hesitant to file a bug on the GNOME tracker because it is likely to be a driver bug that the GNOME developers can't really do anything about.
+
+In order to recover from this situation, one would want to gracefully shut down all running programs. However, each program handles termination differently and their idea of "graceful" seems to be different as well. For example, Firefox 102 currently has a bug (fixed in 103) where if you have cookies to delete on shutdown, startup does not respect your exceptions when sanitizing and you will lose all your cookies. This essentially means on power loss or if Firefox closes unexpectingly, you will need to set up all your cookies again. I've tried pkill, various incantations of kill, systemctl reboot as well as Sysrq but the only way to seemingly avoid this issue is to hit the X button in the GUI.
+
+Many Wayland apps work fine without graphical glitches or issues compared to the past. But many other applications (especially Electron ones) will straight up refuse to work or have various issues if you try to start them with Wayland flags. 
+
+One issue I have not figured out is how to get fullscreen applications to respect my primary monitor. With some you can set the video adapter in the config settings, with others you're SoL and need to move it to the other monitor upon program startup.
+
+As far as performance goes, it's pretty much on par with X11. The only missing thing is NVDEC, but that's a relatively minor issue. Some games (particularly SDL ones) seem to require I use the OpenGL driver and/or X11 backend to avoid graphical glitches/performance issues. I do not believe it's a Vulkan issue, as vkcube and Wine games that utilize DXVK work perfectly fine.
+
+Overall, I'd say it's a tolerable experience, however the freezing is rather annoying. Once I get an AMD card, I will not be looking back.

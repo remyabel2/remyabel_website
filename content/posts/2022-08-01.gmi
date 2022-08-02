@@ -1,0 +1,81 @@
+# Making a COPR package
+
+For those who are not aware, COPR is basically the Fedora equivalent of openSUSE's Open Build Service. Useful software that don't quite meet Fedora's Packaging Guidelines or experimental/newer versions of software than in the repos often make it into COPR.
+
+I use both Firejail and libimobiledevice but as mentioned previously, the former is too outdated (posing a security issue) and the current version of the latter doesn't support newer versions of iOS. I pointed this problem out on IRC and got rebuffed with "well sounds like an upstream problem then." So the natural solution is do the job myself.
+
+Why not just build it from source? There are a number of reasons:
+
+- using mock and COPR allows me to easily target other architecture/platforms than just my system
+- if a new version does hit the repos, upgrading should override my custom version (obviating the need to do an awkward make uninstall then a dnf install)
+- I gain all the advantages of managing the software with my package manager
+- finally, it's just a good learning experience.
+
+However, there is one specific reason that I am glad that I took a look at the specs. They are horribly outdated. The Firejail spec was last updated 9 months ago and does not contain permission hardening as recommended by the developers (this is present in the openSUSE RPM, however). Some of the dependencies listed were considered no longer necessary by upstream, so it's just wasted space. The rest is really just bringing it up-to-date with current packaging guidelines, which is not nearly as important.
+
+The change needed is fairly straightforward:
+
+```
+%pre
+getent group firejail >/dev/null || groupadd -r firejail
+exit 0
+
+%attr(4750,root,%{name}) %verify(not user group mode) %{_bindir}/%{name}
+```
+
+This ensures that users only in the Firejail group (or listed in firejail.users) can use the binary.
+
+libimobiledevice was a little bit more involved. Some of the packages were factored out into a common library called libimobiledevice-glue. Further, they all depend on libplist-devel. It was not strictly necessary to package the latest snapshot of libplist as well, but I did it to be consistent. In total, this means I needed to do libplist, libimobiledevice-glue, libimobiledevice, libusbmuxd and usbmuxd.
+
+My first mistake was not understanding the versioning scheme in the Fedora Packaging Guidelines. A traditional (per their language) versioning scheme looks something like pkg-1.0-5.20050517cvs%{?dist} while the newer syntax would be something like pkg-1.0^20050517cvs-5%{?dist}. Further, you typically increment the Release tag when updating the spec (i.e, pkg-1.0-1 would then become pkg-1.0-2). However, in the newer versioning scheme, you reset the Release tag back to 1 whenever the upstream package is updated. Yes, this is confusing. The diff is:
+
+```
+-Version:        0
+-Release:        20220523git%{shortcommit}%{?dist}
++Version:        0^20220523git%{shortcommit}
++Release:        1%{?dist}
+```
+
+Which creates a result like libimobiledevice-glue-0^20220523gitd2ff796-1.fc36.x86_64.
+
+My second mistake was misunderstanding the purpose of the Obsoletes tag. My intent was for my packages to override the ones in the repos, but Obsoletes indicates that your package essentially overrides another (so adding Obsoletes: libimobiledevice-utils to libmobiledevice.spec means that libimobiledevice-utils won't get installed). It was not needed at all, as simply having proper versioning means the package manager will install the newer version.
+
+Figuring out the proper incantation of mock took a bit but I ended up with something similar to this workflow:
+
+```
+# Initialize the chroot
+mock -r fedora-36-x86_64 --init
+
+# Generate the srpms
+for spec in SPECS/*.spec
+    mock -r fedora36-x86_64 --buildsrpm --spec "$spec" --sources SOURCES/ --resultdir SRPMS/
+done
+
+# Build and upload to COPR
+copr-cli build some-package-project SRPMS/some-package.src.rpm
+```
+
+COPR lets you monitor the build or CTRL+C so you can get back to doing something else, but a nice feature is that you can queue up multiple builds at the same time. As libplist and libimobiledevice-glue are dependencies, I needed to wait for those to be built first, and configure the projects to use those repos in COPR.
+
+If not using COPR, you can chain build with mock.
+
+```
+mock -r fedora-36-x86_64 --rebuild --chain pkg1.src.rpm pkg2.src.rpm
+```
+
+The order is important, i.e libplist-devel should be listed first. Then I can either decide to install the RPM's locally or enable the COPR repo. The former does not rely on Internet, but the latter would ensure a smoother upgrade with new package updates.
+
+All that remains left is testing. For Firejail, it's just a matter of ensuring that it behaves exactly like it does before. For libimobiledevice however, backups should now be functioning. So:
+
+```
+idevicepair pair
+idevicepair validate
+idevicebackup2 backup backup_dir
+idevicebackup2 list backup_dir
+```
+
+If this succeeds, it means everything went well.
+
+If you are on a Fedora 35 or 36 machine and want to test it out, you can find the repo and instructions below. Feel free to give me feedback. Thanks.
+
+=> https://git.sr.ht/~remyabel/rpmspecs

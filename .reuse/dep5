@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: remyabel's gemlog
+Upstream-Contact: remyabel <remyabel@gmail.com>
+Source: gemini://remyabel.srht.site/
+
+# Sample paragraph, commented out:
+#
+# Files: src/*
+# Copyright: $YEAR $NAME <$CONTACT>
+# License: ...

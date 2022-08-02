@@ -1,0 +1,13 @@
+# Unmaintained packages
+
+I'm a strong advocate of downstream packaging, however, one of the downsides I neglected to mention is when a package becomes unmaintained (i.e, orphaned). I've seen this happen with both traditional package management and also on Flathub.
+
+In the latter case, the update for an app and a PR was available for months, but the maintainer was inactive. I e-mailed the Flathub admins and they manually intervened. It was for an emulator, so not a big deal and I didn't plan on using it for long anyway. As another example, arc-theme (a GTK theme) was outdated for months as the original upstream was no longer maintained. It took a while for the package for a new maintainer to adopt the package and switch to the new upstream.
+
+However, I was unpleasantly surprised to find that the Firejail version in Fedora is over a year old. This may not normally be an issue, as Fedora may choose to not immediately update to the latest version (i.e, preserving major point releases for the next distro version). However, a high severity CVE for Firejail was found recently and the bugzilla ticket has been open for over two months with no action. One would at least expect a backport or simply an update to the latest version, but both maintainers assigned to the package have not been active for several months.
+
+The end result was that I needed to compile Firejail from source, which is less than ideal. It becomes a maintenance burden and I need to basically do the job of the maintainer: keep it up to date, keep an eye out for CVE's, do any distro specific patches, etc.
+
+For this reason, I often keep an eye out to see if packages I regularly use have active maintainers or not, however, there is no automated way I know of checking if a package is effectively unmaintained.
+
+EDIT: I forgot about remove-retired-packages. However, this is designed to be run for system upgrades and will only remove packages that block upgrading.

@@ -1,0 +1,8 @@
+title = "remyabel's gemlog"
+url = "gemini://remyabel.srht.site"
+source_dir = "content"
+dest_dir = "public"
+# Optional
+template_dir = "templates" # Directory for the templates
+feed_title = "posts remyabel's gemlog" # Atom Feed name
+feed_path = "posts/" # Directory on source_dir to search for articles for the feed
