@@ -1,0 +1,53 @@
+# Converting my 1TB drive to BTRFS and Firejail
+
+## BTRFS time
+
+I have two 128GB SSD's and 1TB hard drive. The SSD's have been on BTRFS for a while, but I have not converted the 1TB to BTRFS because there's no way for me to backup the data (due to lack of money). There is nothing important stored on there so I didn't mind losing the data per se, but it would be inconvenient to download/set everything up again.
+
+I bit the bullet and decided to incrementally shrink the ext4 partition while increasing the size of the BTRFS partition then copying the data over. This was a very time consuming process. While technically risky, I've never experienced data loss via this method and so long as you don't accidentally shrink the partition too far, the chance of data loss is actually quite low.
+
+After several hours, it finally completed and I needed to setup the new mount in fstab:
+
+```
+UUID=insert-uuid-here       /my/second_drive  btrfs   compress=zstd:1,x-systemd.device-timeout=0 0 0
+```
+
+One of the neat things about BTRFS is the transparent compression and one of my motivations for switching (aside from the checksumming features, etc.) Most of the files on the drive were already compressed, however, running defrag allowed me to compress existing files:
+
+```
+sudo btrfs fi defrag -czstd -r /my/second_drive/
+sudo compsize -x /my/second_drive/
+Processed 196136 files, 944824 regular extents (1048813 refs), 55855 inline.
+Type       Perc     Disk Usage   Uncompressed Referenced
+TOTAL       95%      610G         641G         655G
+none       100%      570G         570G         572G
+zstd        55%       39G          71G          82G
+```
+
+Saving roughly 30 gigs is not a whole lot, but not bad either. We can also use duperemove after to save a extra few gigs. Note that duperemove breaks up reflinks so this can actually increase disk usage, however practically speaking, I don't think there was many reflinks on my system at all, so doing both saved space.
+
+As a sanity check, I ran btrfs check and scrub after to ensure everything was good.
+
+## Firejail vs Flatpak
+
+While Fedora is pushing for eventually using only Flatpaks whenever possible (with their Silverblue initiative), I don't think it's quite ready yet. Currently you have two primary registries for obtaining Flatpaks:
+
+1. The Fedora registry
+2. The third-party Flatpak registry
+
+The Fedora registry converts existing rpms to Flatpaks and doesn't contain non-free software (like codecs) which is not ideal for most people. However, Flathub does not have the quality assurance of rpm packages built on Fedora infrastructure. I've found many Flatpaks that are outdated, have poor sandbox configurations, etc.
+
+One of the current disadvantages of Flatpak compared to Firejail (which may improve in the future) is that Firejail has much more granular sandboxing features. Further, Flatpak requires that the application itself be updated in order to, i.e support portals, if a Flatpak'd browser needs to integrate with the addon for a Flatpak'd password manager. With Firejail, this is a non-issue as you can simply whitelist the binaries and the required paths. Example:
+
+```
+# Fedora uses shell scripts to launch firefox - add the next line to your firefox.local to enable private-bin.
+private-bin basename,bash,cat,dirname,expr,false,firefox,firefox-wayland,getenforce,ln,mkdir,pidof,restorecon,rm,rmdir,sed,sh,tclsh,true,uname,keepassxc-proxy
+
+# Allow keepassxc addon
+whitelist ${RUNUSER}/org.keepassxc.KeePassXC.BrowserServer
+whitelist ${RUNUSER}/kpxc_server
+```
+
+Space is also not a concern as you don't need to download additional runtimes and can just wrap existing rpm installations.
+
+With that being said, there are two primary downsides to Firejail. First, as mentioned in previous articles, the version shipped in Fedora is horrendously outdated, so I currently maintain a COPR for personal usage. Secondly, some of the Firejail profiles suffer from the same issue as Flatpak in that they can be outdated. You can use jailcheck or monitor the changelog to incrementally update profiles. Why not submit a pull request? It would be time consuming and I'm not familiar with contributing to Firejail, so it's easier to keep my changes local for now. Regardless, the point is that it's an additional maintenance burden.
