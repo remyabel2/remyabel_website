@@ -1,0 +1,41 @@
+# Using iGPU with NVIDIA on Wayland
+
+One of the things I debated trying was making my iGPU the primary card and NVIDIA selectively for CUDA and GPU intensive programs. Note that I'm on a desktop and not a laptop, where most usecases target laptops. Because this is a pain to setup on X11 and there's tons of articles on Prime, Bumblebee, Optimus, etc. I expected this to be a pain in the ass.
+
+I left the NVIDIA drivers installed (and apparently already had some intel drivers installed, so no change needed there) then plugged my DVI monitor into the iGPU slot while keeping my HDMI monitor plugged into NVIDIA. I went into the BIOS, enabled my iGPU, booted into GNOME and...everything works out of the box? What?
+
+First I was surprised that the HDMI monitor was working without extra configuration. But I was doubly surprised that the NVIDIA card was selectively used automatically (i.e, for vkcube) without extra configuration as well. If I want to explicitly run a program with the NVIDIA card, I use prime-run which is actually just a shell-script that says:
+
+```
+#!/bin/bash
+__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia "$@"
+```
+
+mpv will automatically use NVIDIA due to nvdec and Firefox just needs the proper LIBVA_DRIVER_NAME value and we're good to go. We can verify which is being utilized with intel_gpu_top and nvidia-smi respectively. So what are the advantages here?
+
+First, the iGPU supports more codecs for hardware acceleration:
+
+```
+$ env LIBVA_DRIVER_NAME=nvidia vainfo | wc -l
+libva info: VA-API version 1.14.0
+libva info: User environment variable requested driver 'nvidia'
+libva info: Trying to open /usr/lib64/dri/nvidia_drv_video.so
+libva info: Found init function __vaDriverInit_1_0
+libva info: va_openDriver() returns 0
+14
+$ env LIBVA_DRIVER_NAME=iHD vainfo | wc -l
+libva info: VA-API version 1.14.0
+libva info: User environment variable requested driver 'iHD'
+libva info: Trying to open /usr/lib64/dri/iHD_drv_video.so
+libva info: Found init function __vaDriverInit_1_14
+libva info: va_openDriver() returns 0
+35
+```
+
+This removes the need for nvidia-vaapi-driver and works seamlessly with Firefox.
+
+Secondly, it's well known that intel/AMD with mesa has much better Wayland support than NVIDIA does. This means a much smoother experience. Some applications may not work correctly (gzdoom crashes for example), but I tested a variety of other things including Firefox, Retroarch and mpv and I'm confident that the experience is stable.
+
+What about sway? It's well known that sway does not support NVIDIA. Sway seems to work OK with NVIDIA being the primary GPU and both monitors work correctly. However, with the iGPU/NVIDIA setup, Sway does not seem to be able to detect the second monitor. Using WLR_DRM_DEVICES did not help. While I would experiment further, it's probably pointless since again NVIDIA is not strictly supported by Sway.
+
+Finally, I could probably power down the NVIDIA GPU while not in use to save on power. This is not a concern of mine, but it's a nice bonus.
