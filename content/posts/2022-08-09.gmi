@@ -1,0 +1,21 @@
+# RE: Let's Update Our Server, 2022 Edition
+
+Original post by ew0k:
+
+=> gemini://warmedal.se/~bjorn/posts/2022-08-09-let-s-update-our-server-2022-edition.gmi
+
+Indeed, I agree with all the criticisms here and have had been ranting about this exact issue for a while. I thought I'd add some additional commentary.
+
+The ugly pip upgrade line:
+
+```
+pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U
+```
+
+is a consequence of pip not having a dependency resolver for the longest time. What this means is that upgrading all packages at the same time was not recommended due to conflicts and potential to make some programs depending on a specific library version break. This was fixed relatively recently (give or take a few years), but still requires action from projects and benefits mostly developers and NOT end users. This is because unlike distro package managers which primarily target end users, tools like pip primarily target developers. Hence the need for virtualenvs, hacky workarounds and a tedious maintenance burden for keeping packages up to date. Of course there's tools like poetry and pipx now (which is used when you want to install a CLI and not a library), but they are still not ideal.
+
+npm suffers from the same issue. Sure, you can run npm update, but due to version/dependency locking you basically have to rely on the developer to keep things up-to-date. This results in funny situations where a project depends on a dependency that depends on a dependency that fixed a CVE but until the dependent updates THEIR dependency, the dependent dependent dependency cannot update and neither can the project (say that five times fast). While it's considered "good" practice for developers to pin the versions of dependencies, it can backfire when technical debt accumulates.
+
+The unintended consequence of this means that users who are running a node or pip installed project may be running insecure software on their system (and it's been demonstrated in the past that both pip/npm install scripts can do nasty stuff) with no recourse.
+
+The irony is that I remember coming across an issue where someone suggested maybe pip should have a curated repository of packages, which is exactly what a distro is (oversimplification, but you get what I mean). Despite this, many developers are still against traditional package management because of "outdated versions" of packages, even though in many cases this is actually an intended feature.
