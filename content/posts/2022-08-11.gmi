@@ -1,0 +1,43 @@
+# Don't use DuckDuckGo
+
+Previously, the title was "On DuckDuckGo" which was less inflammatory. However, as I continued to do research for this article, my opinion on DDG continued to worsen.
+
+For the most part, DDG is the de facto "mainstream" search engine recommended by privacy advocates. It's the default search engine in Tor browser, continues to be recommended by PrivacyGuides and despite their missteps (privacy failures with their mobile browser and Microsoft trackers), it continues to resist criticism in the PrivacyGuides community. The search results are "good enough" for most usecases.
+
+So what motivated me to write this article? I noticed a peculiar thing where I was getting geographically relevant search results for unrelated search terms (see image below). For example, a search term containing "map project" for a video game would give me search results for my local city/state website that had the word "project" in it.
+
+=> https://ttm.sh/qEi.png
+
+If you cannot view the image, I simply searched for "zdoom community map project" and below are search results for my state. I whited it out to avoid giving away personal information.
+
+I eventually stumbled upon the relevant help article:
+
+=> https://help.duckduckgo.com/duckduckgo-help-pages/privacy/anonymous-localized-results/
+
+Which states:
+
+     At DuckDuckGo, we don’t track you, ever...
+
+     ..snip..
+
+     At the same time, searchers often need accurate location-based results like local weather and restaurants. Interestingly, we can actually serve results (including instant answers and ads) for searches like these while still keeping you anonymous.
+
+    To do this, we simply guess your location by default using a GEO::IP lookup with the IP address that is automatically sent to us via your device; then we throw away both the guessed location and the IP address, per our privacy policy. This process does not need to request any additional information than what you are already sending. 
+
+This is somewhat surprising and undesirable especially because one cannot turn it off. As seen in the example above, it polluted my search results with geographically relevant search results that had nothing to do with my search terms. I e-mailed DDG about this without a response. Although they insist it's anonymous, the best strategy would probably be to not collect the data at all, but I digress. So, if they throw away your IP, then what's the big deal? Let's take a look at their privacy policy:
+
+=> https://duckduckgo.com/privacy
+
+It's written rather informally and is a fairly standard critique about "creepy" search engine tracking, but this is buried at the bottom:
+
+    Your search history is safe with us because it cannot be tied to you in any way.
+
+One skimming the privacy policy may completely miss this statement. I find it slightly deceptive that they would start off with "DuckDuckGo does not collect or share personal information", criticize other search engines, then kind of sneak in the fact that they do collect your search results. According to DDG, this is not an issue because they don't store IP addresses. While all of this is technically true, it's plain weasel wording and deceptive. One can then find more info about how they use your search results here:
+
+=> https://help.duckduckgo.com/privacy/atb/
+
+I'll give them credit. They're completely transparent about what improving.duckduckgo.com is for, what data they collect[1] and what it's used for. However, I'm not entirely convinced that DDG has the same definition of "no collecting" or "anonymous" that the privacy community does. We have to take them on faith that they would not abuse the data is one thing, but their overconfidence that the data cannot be tied to users in anyway is more concerning. It displays either incompetence or arrogance, but a generous application of Hanlon's Razor would imply the former. Companies should focus on data minimization, not maximization.
+
+[1]: TL;DR they put users in A/B buckets by storing data in local storage. They track clicks for the purpose of misspellings. Their browser extension/mobile app is used for device counting and finally they use screen size/click tracking for element visibility and interaction data. Discussing fingerprinting is out of scope of this article, I recommend perusing the arkenfox repository instead. Discussing how DDG could continue to use telemetry for improving the site without collecting IP addresses/search results is also out of scope.
+
+=> https://github.com/arkenfox/
