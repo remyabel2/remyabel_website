@@ -1,0 +1,161 @@
+# Using Borgmatic with Snapper
+
+Previously I talked about going full BTRFS. Fedora has incrementally following in openSUSE's footsteps and has not only adopted BTRFS but plans on integrating snapshots as well. However the proposal never went anywhere. So far you can install python3-dnf-plugin-snapper and snapper today. The former takes snapshots prior to and after installing packages. However, due to Fedora's default filesystem layout, some changes need to be made.
+
+=> https://fedoraproject.org/wiki/Changes/BtrfsWithFullSystemSnapshots
+=> https://torsion.org/borgmatic/
+=> https://en.opensuse.org/Portal:Snapper
+
+Why snapshots? It mildly ensures file consistency (rather than backing up files that may have changed by the time Borg reads it). This of course does nothing about application level consistency. Further, due to BTRFS' deduplication, snapshots are cheap. We don't need to worry about accidental modifications since they will be read-only for our purposes.
+
+## Setting up snapper
+
+The following guide was instrumental to setting up snapper:
+
+=> https://gist.github.com/craftyc0der/3cbdb1f9ed60aa94f8cfc0f54b719b95
+
+First thing's first. Let's setup snapper and make sure snapshots work before we can attempt integration with borgmatic. Creating a config can be done as follows:
+
+```
+sudo snapper -c root create-config
+```
+
+For subvolumes where we do not wish to require root privileges, we can use ACL's like so:
+
+```
+sudo snapper -c home create-config /home
+sudo snapper -c home set-config SYNC_ACL=yes ALLOW_USERS=$USER
+```
+
+From here on out, we don't need sudo to operate on home nor to access the snapshots directly. We can now edit /etc/snapper/configs/ to adjust values to our liking. For example, I adjusted the timeline variables to only keep 5 hourly and 7 daily snapshots.
+
+### Timers
+
+Fedora removes the crontabs in favor of systemd timers. Therefore, there will be no conflict and you can safely enable the timers.
+
+```
+sudo systemctl enable snapper-cleanup.timer
+sudo systemctl enable snapper-timer.timer
+```
+
+Note that snapper-timer uses OnUnitActiveSec=1d instead of OnCalendar. What this means is that snapshots are ONLY cleaned up after the unit's been active for 24 hours. This may lead to potential confusion where it seems like the unit is not working.
+
+### SELinux
+
+Despite the RPM enabling SELinux for snapper, I received some AVC denials. I needed to run restorecon on snapper related directories/file like /etc/sysconfig/snapper and /.snapshots.
+
+### Allowing rollbacks to work
+
+Our subvolume is nested below root, so rollbacks will not work. We can fix this as follows:
+
+```
+sudo btrfs subvolume delete /.snapshots
+sudo mkdir /mnt/btrfs
+sudo mount /dev/dm-0 -o subvolid=5 /mnt/btrfs
+cd /mnt/btrfs
+sudo btrfs subvolume create snapshots
+cd ..
+sudo umount /mnt/btrfs
+sudo rm -r btrfs
+```
+
+Then modify fstab:
+
+```
+UUID=uuid /.snapshots   btrfs   subvol=snapshots,compress=zstd:1,space_cache=v2,x-systemd.device-timeout=0 0 0
+```
+
+And change the default subvolume and update the GRUB configuration:
+
+```
+sudo btrfs subvolume get-default /
+# 257 is our subvolume ID
+sudo btrfs subvolume set-default 257 /
+sudo grubby --update-kernel=ALL --remove-args="rootflags=subvol=root"
+```
+
+## Borgmatic
+
+Now that snapper is all setup, we can begin to integrate it with Borgmatic. There are a few things to take into consideration:
+
+- snapper does not descend into subvolumes or mountpoints, so we can exclude things from rollbacks by making it a subvolume
+- we typically don't want to back up the entire snapshot folder, only the "latest" one
+- our patterns (include/excludes) will need to be adjusted for the new parent directory
+- borg mount will not work with snapshots due to lack of ACLs
+
+I assume you already have a borgmatic config. The source_directories value can be anything since we're ignoring it, but Borgmatic requires it anyway. one_file_system looks tempting, but snapper already excludes subvolumes/mountpoint. It needs to be false for borgmatic to descend into the snapshot at all. Anything else is personal preference. Don't forget to validate it:
+
+```
+validate-borgmatic-config -c config
+```
+
+### Excluding /var/log
+
+=> https://discussion.fedoraproject.org/t/is-there-a-plan-to-integrate-btrfs-snapshots-in-fedora-that-appear-in-bootloader-grub/29336/3
+
+It is not ideal to rollback our logs, so we can make it a separate subvolume like so:
+
+```
+sudo mount /dev/dm-0 /mnt
+sudo cd mnt/
+sudo btrfs subvolume create varlog
+sudo chcon --reference=/var/log varlog
+cp -a root/var/log/* varlog/
+```
+
+Then add it to fstab:
+
+```
+UUID=uuid /var/log                btrfs   subvol=varlog,compress=zstd:1,space_cache=v2,x-systemd.device-timeout=0 0 0
+```
+
+You can clean up the old log files if you wish.
+
+### Adjusting Borgmatic configs and invocations
+
+=> https://projects.torsion.org/borgmatic-collective/borgmatic/issues/251
+
+The above approach uses Borgmatic hooks to create/delete the snapshot and then back that snapshot up. What we plan to do instead is simply backup the latest snapshot at the time of backup. Since snapper runs every hour, I just run Borgmatic at 10 minutes past the hour. However, there is a pickle. Borgmatic source_directories are not dynamic. Normally you can just mount the snapshot somewhere and point Borgmatic towards that, instead we'll calculate the latest snapshot and override the source_directories.
+
+```
+set -l home_number (snapper -c home list --columns=number | tail -n 1 | tr -d ' ')
+borgmatic -v -1 --syslog-verbosity 1 -c ~/.config/borgmatic/repo.yaml --override location.source_directories=["/home/.snapshots/$home_number/snapshot"]
+```
+
+Note that if we have any read-write snapshots, the snapshot with the highest number may not be the "newest snapshot". This is because an older snapshot may have newer files. However, since all of our snapshots are readonly, this is a non-issue.
+
+You can add more source directories to the list if necessary. This will by default run all of the commands: prune, compact, create and check. If you have multiple repos, we can run the commands separately to avoid subsequent creates only happening after the last check.
+
+```
+borgmatic -v -1 --syslog-verbosity 1 -c ~/.config/borgmatic/repo1.yaml --override location.source_directories=["/home/.snapshots/$home_number/snapshot"] prune
+borgmatic -v -1 --syslog-verbosity 1 -c ~/.config/borgmatic/repo2.yaml --override location.source_directories=["/home/.snapshots/$home_number/snapshot"] prune
+
+# et. al for compact, create, check
+```
+
+For our patterns file, if you have a pattern like /home/user for example, and your snapshot directory is /home/.snapshots, then it should change to /home/.snapshots/*/snapshot/user. For root, make sure you exclude directories like proc, run, etc.
+
+### Nested subvolumes
+
+As mentioned previously, snapper does not descend into subvolumes. You would need to create a separate config for each subvolume that you want to backup. Then add it to the source_directories.
+
+```
+set -l config1_number (snapper -c config1 list --columns=number | tail -n 1 | tr -d ' ')
+set -l config2_number (snapper -c config2 list --columns=number | tail -n 1 | tr -d ' ')
+
+borgmatic -v -1 --syslog-verbosity 1 -c ~/.config/borgmatic/repo.yaml --override location.source_directories=["/home/.snapshots/$config1/snapshot", "/mnt/somevolume/.snapshots/$config2/snapshot"]
+```
+
+### Testing
+
+Unless I forgot something, everything should be good to go. So now just remains testing. First, let's do a dry-run:
+
+```
+borgmatic ...  -n -v 1 create --files > files.txt
+```
+
+Then inspect files.txt to ensure everything is properly included/excluded. If you already ran a backup:
+
+```
+borgmatic list --repo repo --archive latest
+```
