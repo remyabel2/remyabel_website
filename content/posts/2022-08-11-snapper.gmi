@@ -1,5 +1,7 @@
 # Using Borgmatic with Snapper
 
+RUN THESE COMMANDS AT YOUR OWN RISK!
+
 Previously I talked about going full BTRFS. Fedora has incrementally following in openSUSE's footsteps and has not only adopted BTRFS but plans on integrating snapshots as well. However the proposal never went anywhere. So far you can install python3-dnf-plugin-snapper and snapper today. The former takes snapshots prior to and after installing packages. However, due to Fedora's default filesystem layout, some changes need to be made.
 
 => https://fedoraproject.org/wiki/Changes/BtrfsWithFullSystemSnapshots
