@@ -2,6 +2,8 @@
 
 RUN THESE COMMANDS AT YOUR OWN RISK!
 
+2022-08-12: I neglected to mention that if your snapshots are on the same drive as the borg repos, you may end up snapshotting the repos. This is undesirable for obvious reasons. Make sure the repos are on a separate subvolume.
+
 Previously I talked about going full BTRFS. Fedora has incrementally following in openSUSE's footsteps and has not only adopted BTRFS but plans on integrating snapshots as well. However the proposal never went anywhere. So far you can install python3-dnf-plugin-snapper and snapper today. The former takes snapshots prior to and after installing packages. However, due to Fedora's default filesystem layout, some changes need to be made.
 
 => https://fedoraproject.org/wiki/Changes/BtrfsWithFullSystemSnapshots
