@@ -16,13 +16,13 @@ I eventually stumbled upon the relevant help article:
 
 Which states:
 
-     At DuckDuckGo, we don’t track you, ever...
+> At DuckDuckGo, we don’t track you, ever...
 
-     ..snip..
+> ..snip..
 
-     At the same time, searchers often need accurate location-based results like local weather and restaurants. Interestingly, we can actually serve results (including instant answers and ads) for searches like these while still keeping you anonymous.
+> At the same time, searchers often need accurate location-based results like local weather and restaurants. Interestingly, we can actually serve results (including instant answers and ads) for searches like these while still keeping you anonymous.
 
-    To do this, we simply guess your location by default using a GEO::IP lookup with the IP address that is automatically sent to us via your device; then we throw away both the guessed location and the IP address, per our privacy policy. This process does not need to request any additional information than what you are already sending. 
+> To do this, we simply guess your location by default using a GEO::IP lookup with the IP address that is automatically sent to us via your device; then we throw away both the guessed location and the IP address, per our privacy policy. This process does not need to request any additional information than what you are already sending. 
 
 This is somewhat surprising and undesirable especially because one cannot turn it off. As seen in the example above, it polluted my search results with geographically relevant search results that had nothing to do with my search terms. I e-mailed DDG about this without a response. Although they insist it's anonymous, the best strategy would probably be to not collect the data at all, but I digress. So, if they throw away your IP, then what's the big deal? Let's take a look at their privacy policy:
 
@@ -30,7 +30,7 @@ This is somewhat surprising and undesirable especially because one cannot turn i
 
 It's written rather informally and is a fairly standard critique about "creepy" search engine tracking, but this is buried at the bottom:
 
-    Your search history is safe with us because it cannot be tied to you in any way.
+> Your search history is safe with us because it cannot be tied to you in any way.
 
 One skimming the privacy policy may completely miss this statement. I find it slightly deceptive that they would start off with "DuckDuckGo does not collect or share personal information", criticize other search engines, then kind of sneak in the fact that they do collect your search results. According to DDG, this is not an issue because they don't store IP addresses. While all of this is technically true, it's plain weasel wording and deceptive. One can then find more info about how they use your search results here:
 
