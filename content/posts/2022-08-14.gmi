@@ -1,0 +1,19 @@
+# This week's mistakes
+
+In order to learn from mistakes, we first have to acknowledge them. This is a list of mistakes I've made this week.
+
+## Using btrfs defrag on a system that has snapshots
+
+As mentioned previously, defrag breaks up reflinks. On a system with little to no reflinks, this will result in neglible space increase. However, recently I started using snapshots and noticed significant space increase with defrag.
+
+At first, I was confused. defrag should not descend into subvolumes and find -mount can further be used to avoid descending into mountpoints. I knew that subvolumes save space by shared extents, yet it didn't click into my brain until later that defragging completely broke those shared extents. With a lot of snapshots..you can see where this is going.
+
+## Excluding snapshots and subvolumes
+
+I amended my previous post on btrfs to make a warning about subvolumes. Generally speaking, we don't want to run defrag or duperemove on snapshots. Nor do we want snapshots to include our backups. Therefore I needed to move my backups to a separate subvolume and make sure all of my scripts excluded snapshots.
+
+## The C++ standard does mention multidimensional arrays
+
+Generally when looking at the C++ standard, I use the index to quickly find information. Under multidimensional array, it links directly to a section where the only mention of multidimensional arrays is a non-normative section (meaning not official). This led to my mistaken belief that in C++ it is instead referred to as "array of arrays".
+
+Somebody linked me to the full version of the standard where it's actually referred multiple times as "multi-dimensional arrays". Note the dash.
