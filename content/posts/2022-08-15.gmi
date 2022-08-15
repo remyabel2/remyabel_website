@@ -1,0 +1,80 @@
+# Borgmatic and snapper, part 2
+
+=> gemini://remyabel.srht.site/posts/2022-08-11-snapper.gmi Part 1
+
+In this article, I go over some improvements from our previous venture with borgmatic and snapper. My previous (and rather janky) approach was not only unnecessary but inefficient. As borg caches based on absolute filepaths, having a stable location is superior to changing it everytime. Further, if you are backing up multiple users (even if it's just root and your own user), it's probably best to run all the scripts as root. Permissions will be preserved, so you shouldn't have to worry about that (though you need root to extract the archives obviously).
+
+First let me post the script in full, then we'll go over it.
+
+```
+#!/bin/bash
+
+# Normal usage:
+# borgmatic -v -1 --syslog-verbosity 1
+# Debug usage:
+# borgmatic -nc -n -v 2
+
+export snapshot_number=$(snapper -c root list --column=number | tail -n 1 | tr -d ' ')
+if mount --bind "/.snapshots/$snapshot_number/snapshot" /mnt/backup_root; then
+    pushd /mnt/backup_root
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml prune
+
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml compact
+
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml create
+    popd
+    umount /mnt/backup_root
+else
+    echo "Unable to mount snapshot $snapshot_number."
+    exit 1
+fi
+
+export home_number=$(snapper -c home list --columns=number | tail -n 1 | tr -d ' ')
+mount --bind "/home/.snapshots/$home_number/snapshot" /mnt/backup_home
+if mountpoint -q /mnt/backup_home; then
+    pushd /mnt/backup_home
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/home.yaml prune
+
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/home.yaml compact
+
+        borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/home.yaml create
+    popd
+    umount /mnt/backup_home
+else
+    echo "Failed to mount /mnt/backup."
+    exit 1
+fi
+
+borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml check
+borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/home.yaml check
+```
+
+I cut out some unnecessary details which makes the script look weird in some places, but I will point them out. First, we create a bind mount to our snapshot directory. If the mount is successful, we change directory to the mount. Per the borg documentation, if you want to backup with relative paths, you need to run borg from the directory you are backing up. As previously, we run the commands in order although this is not strictly necessary in this instance. This makes more sense when you have multiple repos or configs and want to put time consuming tasks at the end (as we do with check later on).
+
+For home, we use mountpoint instead of just checking the return value. This is because I have two external drives that I mount in my home directory. As a bind mount is not recursive by default, we can mount the additional drives like so:
+
+```
+mount --bind "/home/$USER/second_drive/.snapshots/$second_drive_number/snapshot" /mnt/backup_home/second_drive
+```
+
+Of course you would then need to run borgmatic for the additional config. Finally at the end, we run the time consuming checks. You may want to order the checks from least to most time consuming.
+
+For our include/exclude patterns, we can now go back to using regular paths:
+
+```
+P sh
+R /
+- /root/.cache
+- /proc
+- /sys
+- /dev
+- /run
+- /tmp
+- /mnt
+- /var/tmp
+- /var/cache
+- /var/lib/libvirt/images
+- /var/lib/containers
+```
+
+So if we're backing up /mnt/backup_root, this will properly exclude /mnt/backup_root/proc for example, due to the borg behavior mentioned earlier. You will need to migrate your configs from ~/.config/borgmatic.d/ to /etc/borgmatic.d. You can also migrate your ~/.config/borg and ~/.cache/borg folders too if you followed my setup. After the initial file cache is built, backups should now be faster.
