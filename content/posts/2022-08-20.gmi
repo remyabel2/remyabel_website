@@ -1,0 +1,82 @@
+# Borgmatic and snapper, part 3
+
+=> gemini://remyabel.srht.site/posts/2022-08-15 Part 2
+
+This will hopefully be my last entry in this series as we wrap things up.
+
+## Dealing with wrong permissions after extraction
+
+This is not related to borgmatic or snapper per se, but is something that tripped me up and may be good to be aware of. If you for example include a subdirectory but forget to include the parent directory in your patterns file, borg will create the parent directory for you. borg has no way of knowing what the permissions should be:
+
+> Currently, extract always writes into the current working directory ("."), so make sure you cd to the right place  before  calling  borg extract.
+
+> When  parent  directories are not extracted (because of using file/directory selection or any other reason), borg can not restore parent directories' metadata, e.g. owner, group, permission, etc.
+
+Example:
+
+```
++ .cache/something_to_keep
+- .cache
+```
+
+The resulting extraction will have incorrect permissions on .cache, but correct permissions on .cache/something_to_keep. You want this change:
+
+```
+-- .cache
++- .cache/*
+```
+
+This keeps the parent directory, but excludes everything you did not explicitly include.
+
+## Recreating archives
+
+You cannot retroactively fix archives by simply using borg recreate. Instead, we need to create the archives again but simply specify the source as an old snapshot and then specify the archive name. For example, if we amend our script from previous entries:
+
+```
+export root_idx=6
+export home_idx=6
+export root_archive="localhost-2022-08-19T22:10:03.189799"
+export home_archive="localhost-2022-08-19T22:12:44.376343"
+```
+
+Then with borgmatic borg:
+
+```
+borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml prune compact
+borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/home.yaml prune compact
+pushd /mnt/
+    borgmatic --repository /path/to/backup --archive "$root_archive" borg -- create . ./var/log /root/.borgmatic --patterns-from /etc/borgmatic/patterns_root --exclude-caches --compression auto,zlib,6 --one-file-system --show-rc
+    borgmatic --repository /path/to/backup --archive "$home_archive" borg -- create ./home --patterns-from /etc/borgmatic/patterns_home --exclude-caches --compression auto,zlib,6 --one-file-system --show-rc
+popd
+```
+
+You can obtain the flags to use by doing a dry run with the borgmatic create command or just add whatever you want. Note that we put the paths before the borg switches, per the documentation:
+
+> Borg only supports taking options (-s and --progress in the example) to the left or right of all positional  arguments  (repo::archive  and path in the example), but not in between them:
+>  borg create -s --progress repo::archive path  # good and preferred
+>  borg create repo::archive path -s --progress  # also works
+>  borg create -s repo::archive path --progress  # works, but ugly
+>  borg create repo::archive -s --progress path  # BAD
+
+The positional argument for the repository/archive is prepended by borgmatic.
+
+## Improvements to the script
+
+There are a couple of improvements and simplifications we can get. First off, we want to break the lock of the repositories incase there was an interrupted backup. We should also unmount the backup mount but check if the directory exists first.
+
+```
+borgmatic borg -- break-lock
+if [ -d /mnt/var/log ];
+then
+    umount -q /mnt/var/log
+fi
+umount -q /mnt/
+```
+
+Borgmatic commands can be combined into a single line:
+
+```
+borgmatic -v -1 --syslog-verbosity 1 -c /etc/borgmatic.d/root.yaml prune compact
+```
+
+Further, rather than having a separate config for root and home (requiring two separate mounts and duplicate configs), you should consider just merging them into one. You would just need to mount the home snapshot at /mnt/home instead of /mnt/backup_home then update your configs.
