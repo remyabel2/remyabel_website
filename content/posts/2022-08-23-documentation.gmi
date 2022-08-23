@@ -1,0 +1,31 @@
+# Backing up online documentation
+
+I've noticed a recent trend of projects moving most of their documentation online. This means in order to view it, you need a web browser and Internet connectivity. They may have some offline documentation, but I find that many projects contain information that can only be found online. Normally, you'd expect this additional documentation to appear in /usr/share/doc, but this is often not the case if it's not easily packagable. Examples include: GitHub wikis, extensive READMEs, documentation written mostly in Markdown, websites, etc.
+
+Fortunately, most of the time it is easy to get around this problem. If it's a GitHub wiki, we can just clone it and periodically pull from it:
+
+```
+git clone https://github.com/swaywm/sway.wiki.git
+```
+
+If it's a website, we can just mirror it:
+
+```
+wget -c --reject webm,mov,mkv,mp4 \
+    --mirror \
+    --convert-links \
+    -E \
+    --wait=2 --random-wait \
+    -4 \
+    --no-cookies \
+    --user-agent="" \
+    --https-only "$@"
+```
+
+The switches are fairly self-explanatory, but I'll go over them anyway. We reject video files because they can be large and often are not relevant to the actual documentation itself. --convert-links and -E ensures that the website is usable for offline viewing.
+
+Why not just download it if it's available? Often times it's difficult to actually find a download link, if it exists. Other times the source files are not readily consumable, they are built in some CI and generated as HTML files. This is even the case for projects which generate man pages from Markdown. I've mentioned in previous articles that man pages will often be missing because the build process either makes it unsuitable for packaging or is straight up broken.
+
+In order to view the documentation now, we can just spin up a simple server with python3 -m http.server. Note that software like Kiwix and archivebox exists. Kiwix is certainly useful for viewing sites like the Archlinux wiki without clutter, but the GUI is horrid and it will not work for arbitrary websites. archivebox is meant more for archival purposes (hence the name) and the web server interface is similarly horrible.
+
+One other primary difference is that archivebox will store snapshots and retry the entire request. This makes sense for archival purposes, but is not ideal if you are bandwidth/storage conscious and only care about incremental differences. For example, we can use git to track the changes of sites downloaded with wget (and wget will not attempt to redownload files if the server timestamp has not changed). Then, you should backup the git repo independently using backup software.
