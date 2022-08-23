@@ -1,0 +1,17 @@
+# Fun with TTS
+
+Recently, I discovered the Streamelements API used for text-to-speech is available for anyone to use. The most popular voice, Brian, tends to be (ab)used for fun. I'm not a huge fan of the TTS voice that comes with GNOME and other solutions would take a bit of effort to setup, so I decided to make a quick Fish script:
+
+```
+function tts
+    set -l file (mktemp)
+    curl -G 'https://api.streamelements.com/kappa/v2/speech' \
+        --data-urlencode "voice=Brian" \
+        --data-urlencode "text=$argv[1]" \
+        --output "$file"
+    mpv "$file"
+    rm "$file"
+end
+```
+
+I use mpv here for simplicity, replace with your favorite command line audio file player. I was expecting it to be slow, but it is actually quite fast! The obvious downside is that this requires Internet access, but that's a topic for another day.
