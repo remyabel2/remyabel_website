@@ -1,0 +1,40 @@
+# Backing up online documentation, part 2
+
+=> gemini://remyabel.srht.site/posts/2022-08-23-documentation.gmi Part 1
+
+So now that we have some documentation backed up, how do we conveniently view it? We can write a serve.py script that looks like this:
+
+```
+#!/usr/bin/env python3
+import http.server, ssl
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory="documentation/", **kwargs)
+
+
+ssl_settings = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ssl_settings.load_cert_chain("cert/server.crt", "cert/server.key")
+
+server_address = ("localhost", 8443)
+httpd = http.server.HTTPServer(server_address, Handler)
+httpd.socket = ssl_settings.wrap_socket(httpd.socket, server_side=True)
+print("Serving on https://localhost:8443")
+httpd.serve_forever()
+```
+
+Then generate server.crt and server.key with mkcert. However, what I'm interested in is automatically redirecting to the offline version if I visit the site in my browser. Fortunately, there is a very simple solution for this using the Redirector addon.
+
+=> https://github.com/einaregilsson/Redirector
+
+All we do is setup a rule that looks like this:
+
+```
+Redirect: https://example.com(/.*)?$
+to: https://localhost:8443/example.com$1
+Example: https://example.com/somepath → https://localhost:8443/example.com/somepath
+Applies to: Main window (address bar)
+```
+
+Since our wget command will convert the links for local viewing, this should work transparently.
