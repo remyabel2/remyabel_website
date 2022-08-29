@@ -1,0 +1,257 @@
+# Reinstalling from backups
+
+Now that we have a working backup setup, the only thing left to try is to test a restore (and more dangerously, a reinstallation). I planned on doing a reinstall anyway, so this is a good exercise to make sure my backups work as expected.
+
+## Preparation
+
+Generally speaking, we want the Borg config folder (so it knows about our repos) and cache (so that the restoration isn't slow). We also need our repo passwords/keys, fstab and Borgmatic config. Finally, we want a list of currently installed apps. Most solutions involve ansible, KickStarts or some other automated solution, but I drafted up quick scripts instead since I wanted this to be a quick ordeal.
+
+### List of installed apps
+
+For dnf, we just run:
+
+```
+dnf repoquery --userinstalled > rpms_installed.txt
+```
+
+For flatpak, we run:
+
+```
+flatpak list --user --app --columns=origin,ref | tail -n +1 > flatpak_export.txt
+```
+
+### Borg preparation
+
+The simplest (and solution recommended in the docs) is to keep the borg passphrases in /root, properly permissioned, then have Borg read them. A more advanced solution would store the secrets in some sort of password vault, but getting that to work with a superuser is tricky and again more effort than it's worth for this example. We're going to copy it over to a USB drive with root permissions. You can LUKS encrypt the drive if you want, but we're not planning on keeping the contents after reinstallation.
+
+```
+sudo cp -aR /root/passwords /media/usb/reinstall
+sudo cp -aR /root/.config/borg /media/usb/reinstall/borg_config
+sudo cp -aR /root/.cache/borg /media/usb/reinstall/borg_cache
+sudo cp -aR /etc/borgmatic.d/*.yaml /media/usb/reinstall/borgmatic_configs
+sudo cp -aR /etc/borgmatic/patterns* /media/usb/reinstall/borgmatic_patterns
+```
+
+Then, we want to edit the config repository paths to be prefixed with /mnt, which is where we're going to be mounting our filesystems.
+
+```
+repositories:
+        - /mnt/home/user/backups/backup-borg-root
+```
+
+## Reinstalling the system
+
+Go through the installation process and reinstall the system. If you don't have LUKS enabled, you can just delete the root partition if you want. But since I have the drive encrypted and will be restoring from backup anyway, I wiped all the mounts.
+
+It would be good to double check that your layout is the same and also add any BTRFS subvolume mounts. For example, I have /var/log mounted as the varlog subvolume, so I added that in the installer.
+
+### Step 1, updates
+
+Before we even do anything else, we should upgrade the system. Nothing special here:
+
+```
+dnf makecache
+dnf -y offline-upgrade download
+dnf -y offline-upgrade reboot
+```
+
+### Step 2, reinstall your packages
+
+Again, straight forward. You will want to enable or download any repositories you had enabled before running this command.
+
+```
+dnf makecache
+dnf -y --best install $(cat rpms_installed.txt)
+```
+
+### Step 3, snapper config
+
+Incase anything goes wrong, we should snapshot the system to rollback changes. So install snapper, then:
+
+```
+snapper -c root create-config /
+snapper -c home create-config /home
+snapper -c home set-config SYNC_ACL=yes ALLOW_USERS=tom
+systemctl start snapper-timeline
+```
+
+### Step 4, restoration
+
+It goes without saying that this next step should be performed from a LiveCD. There are a few things we have to do first before we restore from backup. If you have LUKS, decrypt and mount the drive:
+
+### Preparation
+
+```
+cryptsetup open /dev/sdX myvolume
+mount /dev/mapper/myvolume /mnt
+```
+
+Proceed to mount any filesystems/subvolumes you have as well as other necessary directories for a chroot:
+
+```
+mount /dev/sdX -o subvol=home /mnt/home
+mount /dev/sdX -o subvol=varlog /mnt/var/log
+cd /mnt/
+mount -t proc /proc proc/
+mount -t sysfs /sys sys/
+mount -o bind /dev dev/
+mount -o bind /run run/
+mount -o bind /sys/firmware/efi/efivars sys/firmware/efi/efivars
+cp /etc/resolv.conf etc/resolv.conf
+```
+
+The chroot is optional, but will be useful if you need to do other tasks.
+
+### Restoring home
+
+And now we are ready to do the restoration. First, copy all required files over. This is on the LiveCD, not inside the chroot.
+
+```
+cp -aR borgmatic_config/* /etc/borgmatic.d/
+cp -aR borgmatic_patterns/* /etc/borgmatic/
+mkdir -p /root/.cache/
+mkdir -p /root/.config/
+cp -aR borg_cache  /root/.cache/borg
+cp -aR borg_config /root/.config/borg
+cp -aR passwords   /root/
+
+borgmatic -v 2 extract \
+    --repository /mnt/home/user/backups/backup-borg \
+    --archive latest \
+    --destination /mnt/ \
+    --progress
+```
+
+If anything went wrong, restore from snapshot.
+
+```
+chroot /mnt /bin/bash
+snapper -c home --machine-readable csv list --columns=number | tail -n 1
+exit # exit chroot
+rsync -avz /mnt/home/.snapshot/<snapshot_idx>/snapshot /mnt/home
+```
+
+### Restoring root
+
+Next, we want to restore /etc. You can restore other root directories if you wish, however since I'm doing a clean reinstallation, it would be pointless. I only care about my config files. The steps are quite similar:
+
+```
+borgmatic -v 2 extract \
+    --repository /mnt/home/user/backups/backup-borg-root \
+    --archive latest \
+    --path "/etc/.etckeeper" "/etc/.git" \
+    --destination /mnt/root/ \
+    --progress
+
+pushd /mnt/root
+borgmatic -v 2 borg \
+    --repository /mnt/home/tom/second_drive/backups/backup-borg-root \
+    --archive latest \
+    extract /etc \
+    --exclude "/etc/.etckeeper" \
+    --exclude "/etc/.git" \
+    --exclude "/etc/fstab" \
+    --exclude "/etc/mtab" \
+	--exclude "/etc/adjtime" \
+	--exclude "/var/lib/logrotate.status" \
+	--exclude "/var/lib/misc/random-seed" \
+	--exclude "/var/lib/ntp/drift/ntp.drift" \
+	--exclude "/etc/lvm/archive/*" \
+	--exclude "/etc/lvm/backup/*" \
+	--exclude "*/.Xauthority"
+popd
+```
+
+A couple of things to note here. First, we extract the etckeeper repository and config. It's okay to not initialize etckeeper beforehand. If we did, we would have to merge unrelated histories. Instead, any diffs between the old and new /etc will be picked up by the repository and you can do a merge post-extraction. Next, we use borgmatic borg. The first command allows us to set a destination. Borg does not and requires us to be in the directory first. We're using borgmatic borg because borgmatic does not support excludes on the command-line. We exclude fstab because we want to change the UUIDs later to match our new filesystems and the rest are pulled from /usr/share/snapper/filters for common files to exclude (essentially, things we don't want to rollback).
+
+### Fixing fstab, initrd and GRUB
+
+Your config files will likely contain leftover UUID entries from your previous installation. We want to make sure that everything is fixed before rebooting. Edit your fstab to match the new UUIDs (obtained with lsblk -f). If your /etc/kernel/cmdline or /etc/default/grub contains incorrect UUIDs, fix those too. Check /etc/crypttab as well. Then regenerate:
+
+```
+chroot /mnt /bin/bash
+dracut --regenerate-all --force
+grub2-mkconfig -o /boot/grub2/grub.cfg
+```
+
+Note that you should have /dev mounted per the earlier instructions for this to work. Once you are inside the chroot, you can also at this time decide to setup other BTRFS related tasks like moving /.snapshots to its own subvolume, etc. 
+
+If everything went smoothly, unmount and reboot.
+
+```
+exit # exit chroot
+umount -R /mnt
+```
+
+## The hard part is over
+
+Now that the scary part is done, let's reinstall our flatpak apps:
+
+```
+flatpak remote-add --user --assumeyes --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+while read -r origin pkg;
+do
+    flatpak install --user --assumeyes "$origin" "$pkg";
+done < flatpak_export.txt
+```
+
+If you notice any issues, such as incorrect permissions, wrong SELinux contexts, then you may need to reinstall some packages. Reinstalling every package on your system is safe, even if it's not needed, but it is time consuming. So only do it if you need to. First, check that everything is OK:
+
+```
+rpm -Va --nomtime
+```
+
+It is normal for this to have output even on a clean system (compare with a LiveCD). However, if you notice any strange entries, like polkit having the wrong user/group, then you need to reinstall some packages. Find the list of packages we need to reinstall with:
+
+```
+rpm -qf $(rpm -Va | grep -i missing | awk '{print $NF}' ) | sort | uniq
+```
+
+This example checks for missing files, you can adapt it for incorrect permissions, etc. A more nuclear approach is just to reinstall everything:
+
+```
+systemctl isolate multi-user # or switch to a tty
+dnf repoquery --installed > post_installed.txt
+dnf makecache
+dnf -y reinstall $(cat post_installed.txt)
+fixfiles -T 0 -B onboot
+dracut --regenerate-all --force
+systemctl reboot
+```
+
+fixfiles will fix any SELinux contexts for us. -T 0 instructs it to use all CPU threads, -B records the last check so it's faster next time and onboot will make it happen on reboot.
+
+## Verification
+
+At this point, all that's left to do is verify that you have a working system. Some commands you can run:
+
+```
+# check logs
+dmesg --ctime
+journalctl -b -p5
+
+# makes sure your RPM database is sane and no duplicate/broken packages
+dnf check
+
+# per earlier
+rpm -Va --nomtime
+fixfiles -T 0 check
+
+# compare the backup to your system
+borg export-tar /path/to/repo::archive-name - | tar --compare -f - -C /path/to/compare/to
+
+# check /etc
+git -C /etc status
+git -C /etc log
+
+# check mounts
+findmnt --verify --verbose
+btrfs subvolume list /
+btrfs subvolume get-default /
+
+# check kernel cmdlines
+grubby --info=ALL
+```
+
+And now you're done.
