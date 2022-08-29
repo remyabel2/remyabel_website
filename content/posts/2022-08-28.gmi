@@ -66,12 +66,12 @@ dnf -y --best install $(cat rpms_installed.txt)
 
 ### Step 3, snapper config
 
-Incase anything goes wrong, we should snapshot the system to rollback changes. So install snapper, then:
+Incase anything goes wrong, we should the system to rollback changes. So install snapper, then:
 
 ```
 snapper -c root create-config /
 snapper -c home create-config /home
-snapper -c home set-config SYNC_ACL=yes ALLOW_USERS=tom
+snapper -c home set-config SYNC_ACL=yes ALLOW_USERS=user
 systemctl start snapper-timeline
 ```
 
@@ -122,13 +122,13 @@ borgmatic -v 2 extract \
     --progress
 ```
 
-If anything went wrong, restore from snapshot.
+If anything went wrong, restore from.
 
 ```
 chroot /mnt /bin/bash
 snapper -c home --machine-readable csv list --columns=number | tail -n 1
 exit # exit chroot
-rsync -avz /mnt/home/.snapshot/<snapshot_idx>/snapshot /mnt/home
+rsync -avz /mnt/home/.snapshots/<snapshot_idx>/snapshot /mnt/home
 ```
 
 ### Restoring root
@@ -145,7 +145,7 @@ borgmatic -v 2 extract \
 
 pushd /mnt/root
 borgmatic -v 2 borg \
-    --repository /mnt/home/tom/second_drive/backups/backup-borg-root \
+    --repository /mnt/home/user/second_drive/backups/backup-borg-root \
     --archive latest \
     extract /etc \
     --exclude "/etc/.etckeeper" \
@@ -174,7 +174,7 @@ dracut --regenerate-all --force
 grub2-mkconfig -o /boot/grub2/grub.cfg
 ```
 
-Note that you should have /dev mounted per the earlier instructions for this to work. Once you are inside the chroot, you can also at this time decide to setup other BTRFS related tasks like moving /.snapshots to its own subvolume, etc. 
+Note that you should have /dev mounted per the earlier instructions for this to work. Once you are inside the chroot, you can also at this time decide to setup other BTRFS related tasks like moving /s to its own subvolume, etc. 
 
 If everything went smoothly, unmount and reboot.
 
