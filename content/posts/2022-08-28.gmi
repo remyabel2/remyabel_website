@@ -1,5 +1,7 @@
 # Reinstalling from backups
 
+EDIT: DO NOT RSYNC FROM SNAPSHOTS! I removed the command from my article. It will potentially cause incorrect file permissions (000) specifically on any files that are modified. Use the proper rollback commands.
+
 Now that we have a working backup setup, the only thing left to try is to test a restore (and more dangerously, a reinstallation). I planned on doing a reinstall anyway, so this is a good exercise to make sure my backups work as expected.
 
 ## Preparation
@@ -128,7 +130,6 @@ If anything went wrong, restore from.
 chroot /mnt /bin/bash
 snapper -c home --machine-readable csv list --columns=number | tail -n 1
 exit # exit chroot
-rsync -avz /mnt/home/.snapshots/<snapshot_idx>/snapshot /mnt/home
 ```
 
 ### Restoring root
