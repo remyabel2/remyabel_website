@@ -1,1 +1,5 @@
 # remyabel's gemlog
+
+Find my old blog posts here:
+
+=> gemini://remyabel.flounder.online/
