@@ -1,0 +1,29 @@
+# RE: Having a Dot File Repo?
+
+Funny how this post was made right around the time that I started using a dotfile repo. I was against it for a while, but actually find it kind of useful. Primarily because it's a much more narrow subset of using git on your entire home directory. The concerns were: what do we do about credentials? And how do we scrub the scripts when pushing it to a remote repository.
+
+The answer is twofold. First, GNU stow is a symlink manager that traditionally is used for managing packages installed from source, but is also good at managing dotfiles. For example:
+
+```
+mkdir .dotfiles
+mkdir -p .dotfiles/fish/.config/fish
+mv ~/.config/fish/config.fish .dotfiles/fish/.config/fish/
+```
+
+Then we create the symlinks with:
+
+```
+cd .dotfiles && stow fish
+```
+
+stow automatically does the right thing and symlinks ~/.config/fish/config.fish to .dotfiles/fish/.config/fish. With this setup, we don't really need to worry about a .gitignore as much because we're explicitly including files. But let's say that we DO want to exclude stuff. Traditionally, we do something like putting our secrets in an .env file, adding that to ignore, then sourcing its contents.
+
+```
+touch .env
+echo "SECRET=SOME_SECRET"
+echo ".env" >> .gitignore
+# then in a script...
+source .env
+```
+
+Note that while it's trendy to push the dotfiles to a remote repository, I just keep it local and have it as part of my regular backups.
