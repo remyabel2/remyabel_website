@@ -1,0 +1,37 @@
+# Real life examples of bad upstream packaging
+
+The debate between upstream and downstream packaging rages on, especially as of late. I thought I'd express some frustration at some third party repositories I've tried to install lately and what went wrong.
+
+## Differences between upstream and downstream
+
+Most people reading this will probably already be familiar with these concepts, but I'll briefly go over them anyway. "Upstream" typically refers to an application developer. So for example, if Fedora packages GNOME, GNOME will be the upstream. Distributions that package these applications would be "downstream". Although Fedora makes GNOME the default desktop and they work closely together, it's important to know the difference so bug reports go to the right place.
+
+## Third party repositories
+
+Fedora has strict packaging guidelines on what's allowed in the base repositories. Usually this may be due to patenting issues, but security and quality is another issue. Fedora makes no guarantees about the security or quality of third party repositories. Examples are COPR and RPMFusion. COPR is a build service similar to openSUSE's Open Build System while RPMFusion works closely with Fedora to provide packages that cannot land in Fedora itself.
+
+However, increasingly as of late, developers have opted to take over packaging of their own software themselves. Many people argue that this is a good thing as it cuts out the middleman. After all, developers would know their own software best, updates can be delivered faster and it's better for security right? However, there are some downsides to this approach that I will detail below.
+
+## The downsides
+
+Recently, GitHub let the GPG signing key to sign their packages (which affected both Debian and Fedora expire). This meant anyone trying to install an update will be told that the key is invalid. This is a good thing, because it stops malicious attacks or mistakes. Users were required to take manual steps to alleviate this issue:
+
+```
+curl -fsSL -o /var/tmp/githubcli-archive-keyring.gpg \
+    https://cli.github.com/packages/githubcli-archive-keyring.gpg
+gpg --keyring /var/tmp/githubcli-archive-keyring.gpg \
+    --no-default-keyring --export --armor > /var/tmp/githubcli-archive-keyring.asc
+rpm --import /var/tmp/githubcli-archive-keyring.asc
+```
+
+=> https://github.com/cli/cli/issues/6175
+
+This is unacceptable for two reasons:
+* Letting a GPG key sign is similar to letting an TLS certificate expire, except worse, since the security of packages depends on valid signing keys
+* Users having to take manual steps is bad. It's error prone, insecure and reduces trust in the package
+
+Another example are repositories that replaces base packages. RPMFusion intentionally does NOT package anything that would normally be packaged in Fedora. This is a good thing: it avoids conflicts and means you can safely remove RPMFusion without breaking your system. Repositories that DO replace base packages will inevitably introduce conflicts and make it hard to remove the packages from your system, especially if protected packages depend on them. For example, negativo17 packages gstreamer1 in a different way to Fedora, but GNOME depends on gstreamer1. Removing negativo17 requires careful invocations of dnf distro-sync --allowerasing and dnf swap to get around this.
+
+Finally, one annoying trend that's been popular of late are bloated install scripts and the curl | sudo bash pattern. Despite developers acknowledging this pattern is insecure, they still insist on doing it for some reason. A classic example I've brought up in the past is Pi-hole. Their install script is thousands of lines long and doesn't even uninstall properly (likely due to complexity). Another project I tried made me do curl | sudo bash just to enable a repository (you'd normally do dnf install https://link-to/rpm or dnf config-manager --set-enabled=some.repo) and installed 200 packages. You can normally run sudo dnf history undo last for well-formed packages to undo a transaction, but since it replaced base packages, this was not possible.
+
+In the end, developers are duplicating effort and creating more work for themselves for little gain. If we let package maintainers do their job, things would go a lot more smoothly. I will repeat this mantra until we can get back on track.
