@@ -14,7 +14,7 @@ However, increasingly as of late, developers have opted to take over packaging o
 
 ## The downsides
 
-Recently, GitHub let the GPG signing key to sign their packages (which affected both Debian and Fedora expire). This meant anyone trying to install an update will be told that the key is invalid. This is a good thing, because it stops malicious attacks or mistakes. Users were required to take manual steps to alleviate this issue:
+Recently, GitHub let the GPG signing key to sign their packages (which affected both Debian and Fedora) expire. This meant anyone trying to install an update will be told that the key is invalid. This is a good thing, because it stops malicious attacks or mistakes. Users were required to take manual steps to alleviate this issue:
 
 ```
 curl -fsSL -o /var/tmp/githubcli-archive-keyring.gpg \
@@ -27,7 +27,7 @@ rpm --import /var/tmp/githubcli-archive-keyring.asc
 => https://github.com/cli/cli/issues/6175
 
 This is unacceptable for two reasons:
-* Letting a GPG key sign is similar to letting an TLS certificate expire, except worse, since the security of packages depends on valid signing keys
+* Letting a GPG key sign expire is similar to letting an TLS certificate expire, except worse, since the security of packages depends on valid signing keys
 * Users having to take manual steps is bad. It's error prone, insecure and reduces trust in the package
 
 Another example are repositories that replaces base packages. RPMFusion intentionally does NOT package anything that would normally be packaged in Fedora. This is a good thing: it avoids conflicts and means you can safely remove RPMFusion without breaking your system. Repositories that DO replace base packages will inevitably introduce conflicts and make it hard to remove the packages from your system, especially if protected packages depend on them. For example, negativo17 packages gstreamer1 in a different way to Fedora, but GNOME depends on gstreamer1. Removing negativo17 requires careful invocations of dnf distro-sync --allowerasing and dnf swap to get around this.
